@@ -1,0 +1,37 @@
+body {
+  margin: 0;
+  font-family: "Josefin Sans", sans-serif;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  min-height: 100vh;
+}
+
+#app > * {
+  grid-area: 1/1/2/2;
+}
+
+#control {
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+}
+
+#display {
+  display: grid;
+  place-content: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+#display[data-contrast] {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+#color-name-container {
+  font-size: clamp(0.75em, 10vh, 2em);
+  font-weight: 600;
+  margin: 0 auto;
+  text-align: center;
+}
