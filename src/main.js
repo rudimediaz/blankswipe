@@ -36,20 +36,71 @@ const countContrast = (rgbValues) => {
 const HUE = new WeakMap();
 const SAT = new WeakMap();
 const LUM = new WeakMap();
+/**@type {WeakMap<HTMLElement,Set<Touch>>} */
+const TOUCH = new WeakMap();
 const worker = new MyWorker();
 const workerProxy = wrap(worker);
 const app = document.getElementById("app");
 const display = document.getElementById("display");
 const controlAreas = document.querySelectorAll(".control-area");
 const colorNameContainer = document.getElementById("color-name-container");
-window.addEventListener("DOMContentLoaded", (e) => {
+
+//event registration
+window.addEventListener("DOMContentLoaded", handleDCL);
+window.addEventListener("load", handleLoad);
+display.addEventListener("update-color", handleUpdateColor);
+controlAreas.forEach((el) => {
+  el.addEventListener("touchstart", handleTouchStart);
+  el.addEventListener("touchmove", handelTouchMove);
+  el.addEventListener("touchend", handleTouchEnd);
+});
+app.addEventListener("update-hue", handleUpdateHue);
+app.addEventListener("update-sat", handleUpdateSat);
+app.addEventListener("update-lum", handleUpdateLum);
+colorNameContainer.addEventListener("color-name-ready", handleColorNameReady);
+
+//subroutine
+function setHue(val) {
+  HUE.set(this, val);
+  updateColor.call(this);
+}
+
+function setSat(val) {
+  SAT.set(this, val);
+  updateColor.call(this);
+}
+
+function setLum(val) {
+  LUM.set(this, val);
+  updateColor.call(this);
+}
+
+function updateColor() {
+  const updateColorEvent = new CustomEvent("update-color", {
+    detail: {
+      hsl: [HUE.get(this), SAT.get(this), LUM.get(this)],
+    },
+  });
+  display.dispatchEvent(updateColorEvent);
+}
+
+function changeBackground(hsl) {
+  this.style.backgroundColor = hsl;
+}
+
+function setTextContent(textContent) {
+  this.textContent = textContent;
+}
+
+//event handlers
+function handleDCL() {
   const h = randomizeHue(seed);
   const [s, l] = new Array(2).fill(null).map((_) => randomizeSatLum(seed));
   sessionStorage.setItem("initial_color", JSON.stringify({ h, s, l }));
   workerProxy.fetchColorDatabase();
-});
+}
 
-window.addEventListener("load", (e) => {
+function handleLoad() {
   const storedHSL = sessionStorage.getItem("initial_color");
 
   if (typeof storedHSL === "string") {
@@ -62,9 +113,9 @@ window.addEventListener("load", (e) => {
     setSat.call(app, 50);
     setLum.call(app, 50);
   }
-});
+}
 
-display.addEventListener("update-color", (e) => {
+function handleUpdateColor(e) {
   const [h, s, l] = e.detail.hsl;
   changeBackground.call(display, hslToString(h, s, l));
   const currentStyle = getComputedStyle(display, null);
@@ -91,92 +142,48 @@ display.addEventListener("update-color", (e) => {
       colorNameContainer.dispatchEvent(colorNameReady);
     });
   }
-});
+}
 
-controlAreas.forEach((el) => {
-  /**@type {WeakMap<HTMLElement,Set<Touch>>} */
-  const touch = new WeakMap();
-  el.addEventListener(
-    "touchstart",
-    /**@param {TouchEvent} e */ (e) => {
-      const set = new Set();
-      set.add(e.targetTouches[0]);
-      touch.set(e.target, set);
-    }
-  );
-  el.addEventListener(
-    "touchmove",
-    /**@param {TouchEvent} e */ (e) => {
-      const currentSet = touch.get(e.target);
-      currentSet.add(e.changedTouches[0]);
-    }
-  );
-  el.addEventListener(
-    "touchend",
-    /**@param {TouchEvent} e */ (e) => {
-      const currentSet = touch.get(e.target);
-      const touchList = Array.from(currentSet);
-      const acceleration = countMovement(touchList.map((t) => t.clientX));
-      const eventBind = e.target.getAttribute("data-event");
-      const colorUpdateEvent = new CustomEvent(eventBind, {
-        detail: {
-          value: acceleration,
-        },
-      });
-      app.dispatchEvent(colorUpdateEvent);
-    }
-  );
-});
+function handleTouchStart(e) {
+  const set = new Set();
+  set.add(e.targetTouches[0]);
+  TOUCH.set(e.target, set);
+}
+function handelTouchMove(e) {
+  const currentSet = TOUCH.get(e.target);
+  currentSet.add(e.changedTouches[0]);
+}
+function handleTouchEnd(e) {
+  const currentSet = TOUCH.get(e.target);
+  const touchList = Array.from(currentSet);
+  const acceleration = countMovement(touchList.map((t) => t.clientX));
+  const eventBind = e.target.getAttribute("data-event");
+  const colorUpdateEvent = new CustomEvent(eventBind, {
+    detail: {
+      value: acceleration,
+    },
+  });
+  app.dispatchEvent(colorUpdateEvent);
+}
 
-app.addEventListener("update-hue", (e) => {
+function handleUpdateHue(e) {
   const aggregate = HUE.get(app) + e.detail.value;
   const value = clampHue(aggregate);
   setHue.call(app, value);
-});
+}
 
-app.addEventListener("update-sat", (e) => {
+function handleUpdateSat(e) {
   const aggregate = SAT.get(app) + e.detail.value;
   const value = clampSatLum(aggregate);
   setSat.call(app, value);
-});
+}
 
-app.addEventListener("update-lum", (e) => {
+function handleUpdateLum(e) {
   const aggregate = LUM.get(app) + e.detail.value;
   const value = clampSatLum(aggregate);
   setLum.call(app, value);
-});
+}
 
-colorNameContainer.addEventListener("color-name-ready", (e) => {
+function handleColorNameReady(e) {
   setTextContent.call(colorNameContainer, e.detail.name);
-});
-
-function setHue(val) {
-  HUE.set(this, val);
-  updateColor.call(this);
-}
-
-function setSat(val) {
-  SAT.set(this, val);
-  updateColor.call(this);
-}
-function setLum(val) {
-  LUM.set(this, val);
-  updateColor.call(this);
-}
-
-function updateColor() {
-  const updateColorEvent = new CustomEvent("update-color", {
-    detail: {
-      hsl: [HUE.get(this), SAT.get(this), LUM.get(this)],
-    },
-  });
-  display.dispatchEvent(updateColorEvent);
-}
-
-function changeBackground(hsl) {
-  this.style.backgroundColor = hsl;
-}
-
-function setTextContent(textContent) {
-  this.textContent = textContent;
 }
